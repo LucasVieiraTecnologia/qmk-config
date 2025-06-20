@@ -19,31 +19,41 @@ jobs:
 
     - name: Configurar ambiente QMK
       run: |
-        qmk setup -y
+        qmk setup -y # Isso vai configurar o QMK dentro do ambiente do GitHub Actions
 
     - name: Encontrar o caminho do QMK Firmware
       id: qmk_path
       run: |
         echo "QMK_PATH=$(qmk config user.qmk_firmware)" >> $GITHUB_OUTPUT
 
-    - name: Copiar meu keymap para o QMK Firmware
+    - name: Encontrar o arquivo JSON do meu layout
+      id: find_layout
       run: |
-        # Este passo copia a pasta 'keyboards' do SEU repositório (que contem o seu keymap)
-        # para a pasta 'keyboards' do QMK Firmware dentro do ambiente de compilação.
-        cp -r ${{ github.workspace }}/keyboards ${{ steps.qmk_path.outputs.QMK_PATH }}/keyboards
+        # Este comando procura o primeiro arquivo .json que encontrar na pasta 'layouts'.
+        # Certifique-se de que é o único .json ou especifique o nome exato.
+        LAYOUT_FILE=$(find ${{ github.workspace }}/layouts -name "*.json" | head -n 1)
+        if [ -z "$LAYOUT_FILE" ]; then
+          echo "Erro: Nenhum arquivo .json encontrado na pasta layouts. Certifique-se de que seu arquivo JSON está lá."
+          exit 1
+        fi
+        echo "LAYOUT_FILE=$LAYOUT_FILE" >> $GITHUB_OUTPUT
+
+    - name: Gerar keymap a partir do JSON
+      run: |
+        # MUITO IMPORTANTE: SUBSTITUA 'seu_teclado' pelo nome do teclado que você usou no QMK Configurator.
+        # E 'meu_layout_gerado' será o nome do keymap que o GitHub Actions vai criar e usar.
+        qmk generate-keymap -kb seu_teclado -km meu_layout_gerado ${{ steps.find_layout.outputs.LAYOUT_FILE }}
+      working-directory: ${{ steps.qmk_path.outputs.QMK_PATH }} # Garante que o comando rode no lugar certo
 
     - name: Compilar o Firmware
       run: |
-        # MUITO IMPORTANTE: SUBSTITUA 'seu_teclado' e 'seu_keymap' pelos nomes corretos do SEU teclado e SEU keymap!
-        # Exemplo: qmk compile -kb dz60rgb -km lucas
-        qmk compile -kb seu_teclado -km seu_keymap
-      working-directory: ${{ steps.qmk_path.outputs.QMK_PATH }} # Garante que o comando compile rode no lugar certo
+        # Use o mesmo 'seu_teclado' e 'meu_layout_gerado' que você definiu acima.
+        qmk compile -kb seu_teclado -km meu_layout_gerado
+      working-directory: ${{ steps.qmk_path.outputs.QMK_PATH }}
 
     - name: Salvar o Firmware Compilado (artefato)
       uses: actions/upload-artifact@v4
       with:
-        name: meu_firmware_qmk # Nome do arquivo que você vai baixar
-        # Adapte a extensão (.hex, .bin, .uf2) de acordo com o que seu teclado usa.
+        name: meu_firmware_qmk
         path: ${{ steps.qmk_path.outputs.QMK_PATH }}/*.hex
-        # Se você não sabe a extensão exata, pode tentar todas comuns:
         # path: ${{ steps.qmk_path.outputs.QMK_PATH }}/*.{hex,bin,uf2}
