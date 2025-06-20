@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest # Usa um computador virtual Linux para rodar o trabalho
 
     container:
-      image: qmkfirmware/qmk_cli:latest # Usa a ferramenta QMK oficial. Ela já tem tudo pronto!
+      image: qmkfirmware/qmk_firmware:latest # Usa a ferramenta QMK oficial. Ela já tem tudo pronto!
 
     steps:
     - name: Baixar meu código (repositório)
