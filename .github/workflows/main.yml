@@ -3,42 +3,60 @@ name: QMK Firmware Build # Nome do seu fluxo de trabalho
 on:
   push:
     branches:
-      - main # Aciona o workflow sempre que houver um push para a branch 'main'
-  workflow_dispatch: # Permite que você acione o workflow manualmente na aba 'Actions' do GitHub
+      - main
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest # Usa uma máquina virtual Ubuntu para rodar o job
-
+    runs-on: ubuntu-latest
     container:
-      image: qmkfirmware/qmk_cli:latest # Usa a imagem Docker oficial do QMK CLI. Ela já tem TUDO pronto!
-                                       # Isso substitui a necessidade de rodar 'qmk setup' manualmente.
+      image: qmkfirmware/qmk_cli:latest
 
     steps:
-    - name: Checkout repository # Pega o código do seu repositório do GitHub
+    - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Locate QMK Firmware path # Encontra onde o QMK Firmware está no container
+    - name: Set up QMK build environment
+      run: |
+        qmk setup -y
+
+    - name: Locate QMK Firmware path
       id: qmk_path
       run: |
         echo "QMK_PATH=$(qmk config user.qmk_firmware)" >> $GITHUB_OUTPUT
 
-    - name: Copy keymap to QMK Firmware # Copia sua configuração (sua pasta 'keyboards') para o local correto
+    - name: Find JSON layout file # Adicionado: Encontra o arquivo JSON do seu layout
+      id: find_layout
       run: |
-        cp -r ${{ github.workspace }}/keyboards ${{ steps.qmk_path.outputs.QMK_PATH }}/keyboards
+        # Este comando procura um arquivo .json dentro da pasta 'layouts'.
+        # Se você tiver mais de um, precisa ajustar para apontar para o correto.
+        # Exemplo: LAYOUT_FILE=$(find ${{ github.workspace }}/layouts -name "seu_layout_especifico.json" | head -n 1)
+        LAYOUT_FILE=$(find ${{ github.workspace }}/layouts -name "*.json" | head -n 1)
+        if [ -z "$LAYOUT_FILE" ]; then
+          echo "Erro: Nenhum arquivo .json encontrado na pasta layouts."
+          exit 1
+        fi
+        echo "LAYOUT_FILE=$LAYOUT_FILE" >> $GITHUB_OUTPUT
 
-    - name: Build firmware # Compila o firmware
+    - name: Generate keymap from JSON # Adicionado: Converte JSON para keymap.c
       run: |
-        # MUITO IMPORTANTE: SUBSTITUA 'seu_teclado' e 'seu_keymap' pelos nomes corretos!
-        # Exemplo: qmk compile -kb dz60rgb -km lucas
-        qmk compile -kb seu_teclado -km seu_keymap
-      working-directory: ${{ steps.qmk_path.outputs.QMK_PATH }} # Garante que a compilação ocorra no diretório QMK
+        # Você precisa fornecer o nome do seu teclado e um nome para o keymap que será gerado.
+        # EXTREMAMENTE IMPORTANTE: Substitua 'seu_teclado' pelo nome da pasta do seu teclado QMK
+        # e 'meu_layout_gerado' pelo nome que você quer para a pasta do keymap gerado.
+        # Este 'meu_layout_gerado' será o -km no comando compile.
+        qmk generate-keymap -kb seu_teclado -km meu_layout_gerado ${{ steps.find_layout.outputs.LAYOUT_FILE }}
+      working-directory: ${{ steps.qmk_path.outputs.QMK_PATH }}
 
-    - name: Upload firmware artifact # Salva o firmware compilado como um "artefato"
+
+    - name: Build firmware
+      run: |
+        # Agora você compila usando o nome do teclado e o nome do keymap gerado ('meu_layout_gerado')
+        qmk compile -kb seu_teclado -km meu_layout_gerado
+      working-directory: ${{ steps.qmk_path.outputs.QMK_PATH }}
+
+    - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
       with:
-        name: qmk_firmware_bin # Nome do artefato (como ele aparecerá para download)
-        # Adapte a extensão do arquivo compilado se não for .hex (pode ser .bin, .uf2, etc.)
+        name: qmk_firmware_bin
         path: ${{ steps.qmk_path.outputs.QMK_PATH }}/*.hex
-        # Se você quer todas as extensões comuns:
         # path: ${{ steps.qmk_path.outputs.QMK_PATH }}/*.{hex,bin,uf2}
